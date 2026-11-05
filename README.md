@@ -5,7 +5,7 @@ Privat, självhostad app som hämtar mina egna bank- och korttransaktioner via
 
 - Backend: Python, FastAPI, SQLite (`backend/`)
 - Frontend: SvelteKit-PWA (`frontend/`), byggs statiskt och serveras av backenden
-- En container, nås bara via Tailscale
+- En container bakom Caddy, nås bara från hemnätverket och via Tailscale
 
 ## Köra på homelabben
 
@@ -24,7 +24,7 @@ Privat, självhostad app som hämtar mina egna bank- och korttransaktioner via
    ```
 
    `EB_REDIRECT_URL` måste vara exakt en av redirect-URL:erna i Enable Banking-appen,
-   t.ex. `https://<maskin>.<tailnet>.ts.net/callback`.
+   t.ex. `https://bank.example.se/callback`.
 
 4. Starta:
 
@@ -32,13 +32,23 @@ Privat, självhostad app som hämtar mina egna bank- och korttransaktioner via
    docker compose up -d --build
    ```
 
-5. Exponera i ditt tailnet med HTTPS:
+5. Lägg till appen i Caddy (HTTPS krävs för PWA:n och BankID-redirecten).
+   Appen har ingen egen inloggning, så begränsa den till hemnätverket och Tailscale:
 
-   ```bash
-   tailscale serve --bg 8000
+   ```caddy
+   bank.example.se {
+       @outside not remote_ip private_ranges 100.64.0.0/10
+       respond @outside 403
+       reverse_proxy 127.0.0.1:8000
+   }
    ```
 
-6. Öppna `https://<maskin>.<tailnet>.ts.net/accounts`, välj **Koppla bank** och logga in med BankID.
+   Kör Caddy på en annan maskin: sätt `PB_LISTEN=<homelab-ip>:8000` i `.env` och proxa till den adressen.
+   Kör Caddy i Docker på samma maskin: proxa till `host.docker.internal:8000`
+   (kräver `extra_hosts: ["host.docker.internal:host-gateway"]` på Caddy-containern)
+   eller lägg båda i samma Docker-nätverk och proxa till `privatebanking:8000`.
+
+6. Öppna `https://bank.example.se/accounts`, välj **Koppla bank** och logga in med BankID.
    Transaktioner hämtas direkt och sedan var `SYNC_INTERVAL_HOURS` timme.
 
 Kom ihåg att även länka kontona under "Link accounts" i Enable Banking-kontrollpanelen

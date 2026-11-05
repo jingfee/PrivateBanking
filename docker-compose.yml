@@ -11,5 +11,6 @@ services:
       - ./data:/data
       - ./secrets/eb.pem:/secrets/eb.pem:ro
     ports:
-      # Only on localhost; expose to the tailnet with: tailscale serve --bg 8000
-      - "127.0.0.1:8000:8000"
+      # Caddy on the same host proxies to 127.0.0.1:8000. If Caddy runs elsewhere,
+      # set PB_LISTEN in .env (e.g. 192.168.1.10:8000).
+      - "${PB_LISTEN:-127.0.0.1:8000}:8000"
