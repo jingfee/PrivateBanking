@@ -1,0 +1,15 @@
+services:
+  privatebanking:
+    build: .
+    container_name: privatebanking
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/privatebanking.db
+      EB_KEY_PATH: /secrets/eb.pem
+    volumes:
+      - ./data:/data
+      - ./secrets/eb.pem:/secrets/eb.pem:ro
+    ports:
+      # Only on localhost; expose to the tailnet with: tailscale serve --bg 8000
+      - "127.0.0.1:8000:8000"
