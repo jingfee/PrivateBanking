@@ -114,3 +114,30 @@ def test_store_session_reuses_account_by_identification_hash(db, client, account
     accs = db.scalars(select(Account).order_by(Account.id)).all()
     assert [(a.identification_hash, a.uid) for a in accs] == [("h1", "uid-NEW"), ("h2", "uid-2")]
     assert conn.status == "active" and conn.valid_until.year == 2027
+
+
+@respx.mock
+def test_database_is_writable_while_fetching_from_bank(tmp_path, client):
+    """The bank call can be slow; other requests must still be able to write meanwhile."""
+    import sqlite3
+
+    path = tmp_path / "t.db"
+    d = Database(str(path))
+    Base.metadata.create_all(d.engine)
+    with d.sessionmaker() as s:
+        conn = Connection(aspsp_name="Skandia", aspsp_country="SE", state="s", status="active")
+        acc = Account(uid="uid-1", identification_hash="h1", aspsp_name="Skandia", connection=conn)
+        s.add_all([conn, acc])
+        s.commit()
+
+        def bank_responds(request):
+            other = sqlite3.connect(path, timeout=0)
+            other.execute("INSERT INTO connections (aspsp_name, aspsp_country, state, status, created_at) "
+                          "VALUES ('X', 'SE', 'other', 'pending', '2026-01-01')")
+            other.commit()
+            other.close()
+            return httpx.Response(200, json={"transactions": [tx("10", entry_reference="a")]})
+
+        respx.get(f"{API}/accounts/uid-1/transactions").mock(side_effect=bank_responds)
+        run = sync_account(s, client, acc)
+        assert run.error is None and run.inserted == 1

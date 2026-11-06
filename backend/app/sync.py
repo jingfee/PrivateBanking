@@ -1,6 +1,7 @@
 """Fetch transactions for accounts and store them."""
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
@@ -21,21 +22,30 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt.replace(tzinfo=timezone.utc) if dt and dt.tzinfo is None else dt
 
 
-def sync_account(db: Session, client: EnableBankingClient, account: Account, overlap_days: int = 10) -> SyncRun:
-    run = SyncRun(account_id=account.id)
-    db.add(run)
-    db.flush()
+# One sync at a time: the scheduler, "Synka nu" and the bank callback may otherwise overlap
+# and insert the same transactions twice.
+SYNC_LOCK = threading.Lock()
 
+
+def sync_account(db: Session, client: EnableBankingClient, account: Account, overlap_days: int = 10) -> SyncRun:
+    with SYNC_LOCK:
+        return _sync_account(db, client, account, overlap_days)
+
+
+def _sync_account(db: Session, client: EnableBankingClient, account: Account, overlap_days: int) -> SyncRun:
+    started = _now()
     last_booked = db.scalar(
         select(func.max(Transaction.date)).where(Transaction.account_id == account.id, Transaction.status == "BOOK")
     )
     date_from = last_booked - timedelta(days=overlap_days) if last_booked else None
+    uid = account.uid
+    db.commit()  # end any open transaction: never hold the database while talking to the bank
 
     try:
-        raw = list(client.transactions(account.uid, date_from=date_from))
+        raw = list(client.transactions(uid, date_from=date_from))
     except EnableBankingError as e:
-        run.error = str(e)
-        run.finished_at = _now()
+        run = SyncRun(account_id=account.id, started_at=started, finished_at=_now(), error=str(e))
+        db.add(run)
         if e.status in (401, 403):
             conn = account.connection
             if conn:
@@ -43,6 +53,9 @@ def sync_account(db: Session, client: EnableBankingClient, account: Account, ove
         db.commit()
         return run
 
+    # Everything below is local and quick: one short write transaction.
+    run = SyncRun(account_id=account.id, started_at=started, inserted=0, updated=0, pending=0)
+    db.add(run)
     txs = [normalize(t) for t in raw]
     booked = [t for t in txs if t.status == "BOOK"]
     pending = [t for t in txs if t.status == "PDNG"]

@@ -23,6 +23,7 @@ def make_engine(database_path: str) -> Engine:
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA journal_mode=WAL")
         cur.execute("PRAGMA foreign_keys=ON")
+        cur.execute("PRAGMA busy_timeout=30000")
         cur.close()
 
     return engine
