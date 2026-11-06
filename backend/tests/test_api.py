@@ -68,3 +68,36 @@ def test_unconfigured_returns_503(tmp_path):
     with TestClient(create_app(settings)) as c:
         assert c.get("/api/health").json()["enable_banking_configured"] is False
         assert c.get("/api/aspsps").status_code == 503
+
+
+def test_unreadable_key_gives_clear_message(tmp_path):
+    key = tmp_path / "eb.pem"
+    key.write_text("x")
+    key.chmod(0)
+    settings = Settings(database_path=tmp_path / "t.db", scheduler_enabled=False, eb_app_id="app",
+                        eb_key_path=key, frontend_dir=tmp_path / "x")
+    import os
+    if os.geteuid() == 0:  # root can read anything; simulate with a missing file instead
+        key.unlink()
+    with TestClient(create_app(settings)) as c:
+        r = c.get("/api/aspsps")
+        assert r.status_code == 503
+        assert "eb.pem" in r.json()["detail"]
+        assert c.get("/api/health").json()["problem"]
+
+
+def test_bad_key_and_network_errors_are_502(tmp_path, private_key):
+    def make(key):
+        settings = Settings(database_path=tmp_path / "t.db", scheduler_enabled=False,
+                            frontend_dir=tmp_path / "x")
+        return create_app(settings, lambda: EnableBankingClient("app", key, API, http=httpx.Client(base_url=API)))
+
+    with TestClient(make("not a pem")) as c:
+        r = c.get("/api/aspsps")
+        assert r.status_code == 502 and "pem" in r.json()["detail"]
+
+    with respx.mock:
+        respx.get(f"{API}/aspsps").mock(side_effect=httpx.ConnectError("Name or service not known"))
+        with TestClient(make(private_key)) as c:
+            r = c.get("/api/aspsps")
+            assert r.status_code == 502 and "Kunde inte nå" in r.json()["detail"]

@@ -3,12 +3,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
 from .config import Settings, get_settings
+from .errors import ConfigError
 from .db import Base, Database
 from .enablebanking import EnableBankingClient
 from .sync import sync_all
@@ -18,9 +19,16 @@ log = logging.getLogger(__name__)
 
 def default_client_factory(settings: Settings):
     def factory():
-        if not settings.eb_app_id or not settings.eb_key_path.exists():
+        if not settings.eb_app_id:
             return None
-        return EnableBankingClient.from_key_file(settings.eb_app_id, settings.eb_key_path, settings.eb_api_url)
+        try:
+            key = settings.eb_key_path.read_text()
+        except FileNotFoundError:
+            raise ConfigError(f"Nyckelfilen {settings.eb_key_path} finns inte (montera secrets/eb.pem)")
+        except OSError as e:
+            raise ConfigError(f"Kan inte läsa nyckelfilen {settings.eb_key_path}: {e.strerror}. "
+                              "Containern kör som uid 1000, kör: sudo chown 1000 secrets/eb.pem")
+        return EnableBankingClient(settings.eb_app_id, key, settings.eb_api_url)
 
     return factory
 
@@ -48,7 +56,11 @@ def create_app(settings: Settings | None = None, client_factory=None) -> FastAPI
     client_factory = client_factory or default_client_factory(settings)
 
     def scheduled_sync():
-        client = client_factory()
+        try:
+            client = client_factory()
+        except ConfigError as e:
+            log.error("sync skipped: %s", e)
+            return
         if client is None:
             return
         with db.sessionmaker() as s:
@@ -75,9 +87,18 @@ def create_app(settings: Settings | None = None, client_factory=None) -> FastAPI
     app.state.client_factory = client_factory
     app.include_router(router)
 
+    @app.exception_handler(Exception)
+    async def unhandled(request: Request, exc: Exception):
+        log.exception("unhandled error on %s", request.url.path)
+        return JSONResponse({"detail": f"Oväntat fel: {type(exc).__name__}: {exc}"}, status_code=500)
+
     @app.get("/api/health")
     def health():
-        return {"ok": True, "enable_banking_configured": client_factory() is not None}
+        try:
+            configured, problem = client_factory() is not None, None
+        except ConfigError as e:
+            configured, problem = False, str(e)
+        return {"ok": True, "enable_banking_configured": configured, "problem": problem}
 
     frontend = settings.frontend_dir
     if frontend.exists():

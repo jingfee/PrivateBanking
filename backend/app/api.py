@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from .errors import ConfigError
 from .enablebanking import EnableBankingClient, EnableBankingError
 from .models import Account, Connection, SyncRun, Transaction
 from .sync import store_session, sync_account, sync_all
@@ -19,9 +20,12 @@ def get_db(request: Request):
 
 
 def get_client(request: Request) -> EnableBankingClient:
-    client = request.app.state.client_factory()
+    try:
+        client = request.app.state.client_factory()
+    except ConfigError as e:
+        raise HTTPException(503, str(e))
     if client is None:
-        raise HTTPException(503, "Enable Banking is not configured (EB_APP_ID / EB_KEY_PATH)")
+        raise HTTPException(503, "Enable Banking är inte konfigurerat: sätt EB_APP_ID i .env")
     return client
 
 

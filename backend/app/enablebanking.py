@@ -3,7 +3,6 @@
 import time
 from collections.abc import Iterator
 from datetime import date, datetime
-from pathlib import Path
 
 import httpx
 import jwt
@@ -11,7 +10,7 @@ import jwt
 
 class EnableBankingError(Exception):
     def __init__(self, status: int, body: str):
-        super().__init__(f"Enable Banking API {status}: {body[:500]}")
+        super().__init__(f"Enable Banking API {status}: {body[:500]}" if status else body)
         self.status = status
         self.body = body
 
@@ -24,10 +23,6 @@ class EnableBankingClient:
         if http is not None and not http.base_url:
             self.http.base_url = base_url
 
-    @classmethod
-    def from_key_file(cls, app_id: str, key_path: Path, base_url: str) -> "EnableBankingClient":
-        return cls(app_id, key_path.read_text(), base_url)
-
     def _token(self) -> str:
         now = int(time.time())
         return jwt.encode(
@@ -38,8 +33,14 @@ class EnableBankingClient:
         )
 
     def _request(self, method: str, path: str, **kwargs) -> dict:
-        headers = {"Authorization": f"Bearer {self._token()}"}
-        r = self.http.request(method, path, headers=headers, **kwargs)
+        try:
+            token = self._token()
+        except (ValueError, TypeError, jwt.PyJWTError) as e:
+            raise EnableBankingError(0, f"Kunde inte signera med nyckeln, är det rätt .pem-fil? ({e})") from e
+        try:
+            r = self.http.request(method, path, headers={"Authorization": f"Bearer {token}"}, **kwargs)
+        except httpx.HTTPError as e:
+            raise EnableBankingError(0, f"Kunde inte nå {self.http.base_url}: {type(e).__name__}: {e}") from e
         if r.status_code >= 400:
             raise EnableBankingError(r.status_code, r.text)
         return r.json()
