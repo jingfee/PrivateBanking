@@ -72,11 +72,15 @@ class EnableBankingClient:
 
     def transactions(self, account_uid: str, date_from: date | None = None) -> Iterator[dict]:
         """All transactions from date_from (or as far back as the bank allows), following pagination."""
-        params: dict = {"date_from": date_from.isoformat()} if date_from else {"strategy": "longest"}
+        base: dict = {"date_from": date_from.isoformat()} if date_from else {"strategy": "longest"}
+        params = base
+        seen: set[str] = set()
         while True:
             page = self._request("GET", f"/accounts/{account_uid}/transactions", params=params)
             yield from page.get("transactions") or []
             key = page.get("continuation_key")
-            if not key:
+            if not key or key in seen:
                 return
-            params = {"continuation_key": key}
+            seen.add(key)
+            # The continuation key belongs to the original query, so repeat its parameters.
+            params = {**base, "continuation_key": key}

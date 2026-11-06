@@ -53,6 +53,7 @@ def test_pagination_and_first_sync_uses_longest(db, client, account):
     assert run.inserted == 2 and run.error is None
     assert route.calls[0].request.url.params["strategy"] == "longest"
     assert route.calls[1].request.url.params["continuation_key"] == "k2"
+    assert route.calls[1].request.url.params["strategy"] == "longest"
     assert route.calls[0].request.headers["authorization"].startswith("Bearer ")
 
 
