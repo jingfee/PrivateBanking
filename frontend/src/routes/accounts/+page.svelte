@@ -129,8 +129,10 @@
           <div class="right small muted">
             <div class="num">{a.transaction_count} transaktioner</div>
             <div>Synkat {a.last_synced_at ? new Date(a.last_synced_at).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : 'aldrig'}</div>
-            {#if a.last_error}<div class="error">Senaste synken misslyckades</div>{/if}
           </div>
+          {#if a.last_error}
+            <p class="sync-error">Senaste synken misslyckades: {a.last_error}</p>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -146,7 +148,14 @@
   .consent { margin: 0 0 8px; font-size: 0.88rem; color: var(--muted); }
   .consent.warn { color: var(--pending); font-weight: 600; }
   ul { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
-  li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; }
+  li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 12px 14px; }
+  .sync-error {
+    flex-basis: 100%;
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: var(--danger);
+    overflow-wrap: anywhere;
+  }
   li + li { border-top: 1px solid var(--rule); }
   .right { text-align: right; }
   .small { font-size: 0.85rem; }
