@@ -14,6 +14,7 @@
   let to = $state('');
   let category = $state('');
   let picking = $state<Transaction | null>(null);
+  let notice = $state('');
   let loading = $state(true);
   let error = $state('');
 
@@ -43,6 +44,13 @@
     }
   }
 
+  /** Reload what is already shown, e.g. after other rows changed category. */
+  async function refresh() {
+    const res = await api.transactions({ q, account, from, to, category, limit: Math.max(items.length, PAGE) });
+    items = res.items;
+    total = res.total;
+  }
+
   let timer: ReturnType<typeof setTimeout>;
   function search() {
     clearTimeout(timer);
@@ -51,9 +59,18 @@
 
   async function setCategory(t: Transaction, id: number | null) {
     picking = null;
+    notice = '';
     try {
       const updated = await api.setCategory(t.id, id);
       items = items.map((i) => (i.id === t.id ? { ...i, ...updated } : i));
+      const n = updated.similar_updated;
+      if (n > 0) {
+        const name = id === null ? null : categories.get(id)?.name;
+        notice = name
+          ? `${n} ${n === 1 ? 'liknande transaktion' : 'liknande transaktioner'} fick också kategorin ${name}.`
+          : `${n} ${n === 1 ? 'liknande transaktion' : 'liknande transaktioner'} kategoriserades om.`;
+        await refresh();
+      }
     } catch (e) {
       error = `Kunde inte spara kategorin: ${(e as Error).message}`;
     }
@@ -89,6 +106,13 @@
   <label>Från <input type="date" bind:value={from} onchange={() => load()} /></label>
   <label>Till <input type="date" bind:value={to} onchange={() => load()} /></label>
 </form>
+
+{#if notice}
+  <p class="notice" role="status">
+    <span>{notice}</span>
+    <button type="button" aria-label="Stäng" onclick={() => (notice = '')}>✕</button>
+  </p>
+{/if}
 
 {#if error}
   <p class="error">{error}</p>
@@ -145,6 +169,7 @@
   <CategoryPicker
     title={t.description || 'Okänd transaktion'}
     current={t.category_id}
+    source={t.category_source}
     onselect={(id) => setCategory(t, id)}
     onclose={() => (picking = null)}
   />
@@ -198,6 +223,13 @@
   .amount { font-size: 1.12rem; font-weight: 600; white-space: nowrap; letter-spacing: -0.01em; }
   .in { color: var(--in); }
   li.pending .desc, li.pending .amount { color: var(--muted); font-style: italic; }
+  .notice {
+    position: sticky; top: 64px; z-index: 1;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    margin: 8px 0 0; padding: 8px 8px 8px 12px; font-size: 0.9rem;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius);
+  }
+  .notice button { border: none; background: none; padding: 2px 6px; color: var(--muted); }
   .empty { text-align: center; padding: 48px 0; color: var(--muted); }
   .more { display: block; margin: 24px auto 0; }
 </style>

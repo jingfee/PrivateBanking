@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .errors import ConfigError
 from .enablebanking import EnableBankingClient, EnableBankingError
+from .categorize import set_category
 from .models import Account, Category, Connection, SyncRun, Transaction
 from .sync import store_session, sync_account, sync_all
 
@@ -181,10 +182,9 @@ def update_transaction(tx_id: int, body: TransactionUpdate, db: Session = Depend
         raise HTTPException(404, "Transaktionen finns inte")
     if body.category_id is not None and db.get(Category, body.category_id) is None:
         raise HTTPException(422, "Kategorin finns inte")
-    t.category_id = body.category_id
-    t.category_source = "manual" if body.category_id is not None else None
+    similar = set_category(db, t, body.category_id)
     db.commit()
-    return _transaction(t, t.account)
+    return {**_transaction(t, t.account), "similar_updated": similar}
 
 
 @router.get("/api/categories")

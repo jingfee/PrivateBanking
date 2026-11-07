@@ -65,6 +65,17 @@ class Category(Base):
     sort_order: Mapped[int] = mapped_column(default=0)
 
 
+class CategoryRule(Base):
+    """Learned from the user: transactions with this key (direction + counterparty) get this category."""
+
+    __tablename__ = "category_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(300), unique=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"))
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
@@ -90,7 +101,7 @@ class Transaction(Base):
     mcc: Mapped[str | None] = mapped_column(String(4))
     raw: Mapped[dict] = mapped_column(JSON)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"))
-    category_source: Mapped[str | None] = mapped_column(String(10))  # manual | learned | mcc
+    category_source: Mapped[str | None] = mapped_column(String(10))  # manual | learned | auto (keyword/MCC)
     first_seen: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 

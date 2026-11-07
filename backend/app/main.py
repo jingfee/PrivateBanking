@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api import router
 from .backup import backup_database
+from .categorize import categorize_uncategorized
 from .config import Settings, get_settings
 from .errors import ConfigError
 from .db import Base, Database
@@ -81,6 +82,10 @@ def create_app(settings: Settings | None = None, client_factory=None) -> FastAPI
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         migrate(db, db_path)
+        with db.sessionmaker() as s:  # picks up new built-in keywords for old transactions too
+            if n := categorize_uncategorized(s):
+                log.info("categorised %s transactions", n)
+            s.commit()
         scheduler = None
         if settings.scheduler_enabled:
             scheduler = BackgroundScheduler()

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from .categorize import categorize_uncategorized
 from .enablebanking import EnableBankingClient, EnableBankingError
 from .models import Account, Connection, SyncRun, Transaction
 from .normalize import fingerprints, normalize
@@ -98,6 +99,8 @@ def _sync_account(db: Session, client: EnableBankingClient, account: Account, ov
         db.add(Transaction(account_id=account.id, fingerprint=fp, category_id=category_id,
                            category_source=source, **t.__dict__))
     run.pending = len(pending)
+    db.flush()
+    categorize_uncategorized(db, account.id)
 
     account.last_synced_at = _now()
     run.finished_at = _now()

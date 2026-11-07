@@ -5,11 +5,13 @@
   let {
     title,
     current,
+    source = null,
     onselect,
     onclose
   }: {
     title: string;
     current: number | null;
+    source?: string | null;
     onselect: (id: number | null) => void;
     onclose: () => void;
   } = $props();
@@ -45,6 +47,11 @@
       <div class="title">
         <span class="muted small">Välj kategori för</span>
         <strong>{title}</strong>
+        {#if current !== null && source && source !== 'manual'}
+          <span class="muted small">
+            {source === 'learned' ? 'Inlärd från en liknande transaktion' : 'Föreslagen automatiskt'}
+          </span>
+        {/if}
       </div>
       <button type="button" class="close" aria-label="Stäng" onclick={() => dialog.close()}>✕</button>
     </header>

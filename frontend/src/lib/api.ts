@@ -10,7 +10,7 @@ export type Transaction = {
   aspsp: string;
   mcc: string | null;
   category_id: number | null;
-  category_source: 'manual' | 'learned' | 'mcc' | null;
+  category_source: 'manual' | 'learned' | 'auto' | null;
 };
 
 export type Category = {
@@ -64,7 +64,7 @@ export const api = {
     return request<{ total: number; items: Transaction[] }>(`/api/transactions?${qs}`);
   },
   setCategory: (id: number, category_id: number | null) =>
-    request<Transaction>(`/api/transactions/${id}`, { method: 'PATCH', body: JSON.stringify({ category_id }) }),
+    request<Transaction & { similar_updated: number }>(`/api/transactions/${id}`, { method: 'PATCH', body: JSON.stringify({ category_id }) }),
   categories: () => request<Category[]>('/api/categories'),
   accounts: () => request<Account[]>('/api/accounts'),
   banks: () => request<Bank[]>('/api/aspsps'),
