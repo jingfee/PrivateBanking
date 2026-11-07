@@ -9,3 +9,4 @@ __pycache__/
 node_modules/
 frontend/build/
 frontend/.svelte-kit/
+.env.dev

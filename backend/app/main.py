@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
+from .backup import backup_database
 from .config import Settings, get_settings
 from .errors import ConfigError
 from .db import Base, Database
@@ -44,6 +45,15 @@ def migrate(db: Database, database_path: str) -> None:
     cfg = Config(str(here / "alembic.ini"))
     cfg.set_main_option("script_location", str(here / "alembic"))
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{database_path}")
+
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+    with db.engine.connect() as conn:
+        current = MigrationContext.configure(conn).get_current_revision()
+    if current is not None and current != head:
+        backup_database(Path(database_path), reason=f"before-{head}")
     command.upgrade(cfg, "head")
 
 

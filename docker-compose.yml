@@ -1,5 +1,7 @@
 services:
   privatebanking:
+    # Komodo pulls this image; `docker compose build` builds it locally instead.
+    image: ghcr.io/jingfee/privatebanking:${PB_TAG:-latest}
     build: .
     container_name: privatebanking
     restart: unless-stopped
