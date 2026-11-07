@@ -22,8 +22,11 @@ GitHub Container Registry (`ghcr.io/<ägare>/privatebanking`) med taggarna `late
 
 3. Lägg Enable Banking-nyckeln i `secrets/eb.pem` och `sudo chown 1000 secrets/eb.pem`.
    (Finns inte filen när containern startar skapar Docker en katalog med det namnet.)
-4. Skapa `.env` från `.env.example` och fyll i app-id och redirect-URL.
+4. Ange inställningarna, antingen i en `.env` bredvid `docker-compose.yml` (se `.env.example`)
+   eller som miljövariabler i ditt deploy-verktyg. `EB_APP_ID` och `EB_REDIRECT_URL` krävs;
    `EB_REDIRECT_URL` måste vara exakt en av redirect-URL:erna i Enable Banking-appen.
+   Låter verktyget stackens katalog skapas om, peka `PB_DATA_DIR` och `PB_KEY_FILE` på
+   absoluta sökvägar utanför den.
 5. Är imagen privat: logga in mot registryt med en GitHub-token som har `read:packages`
    (`docker login ghcr.io`).
 6. Starta:
