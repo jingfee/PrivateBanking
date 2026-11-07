@@ -83,9 +83,20 @@ def _sync_account(db: Session, client: EnableBankingClient, account: Account, ov
             run.updated += changed
 
     # Pending rows are a snapshot: replace them wholesale, so a reservation disappears once it is booked.
+    # Keep any category already set on a reservation that is still pending.
+    kept = {
+        fp: (cid, source)
+        for fp, cid, source in db.execute(
+            select(Transaction.fingerprint, Transaction.category_id, Transaction.category_source)
+            .where(Transaction.account_id == account.id, Transaction.status == "PDNG",
+                   Transaction.category_id.is_not(None))
+        )
+    }
     db.execute(delete(Transaction).where(Transaction.account_id == account.id, Transaction.status == "PDNG"))
     for t, fp in zip(pending, fingerprints(pending)):
-        db.add(Transaction(account_id=account.id, fingerprint=fp, **t.__dict__))
+        category_id, source = kept.get(fp, (None, None))
+        db.add(Transaction(account_id=account.id, fingerprint=fp, category_id=category_id,
+                           category_source=source, **t.__dict__))
     run.pending = len(pending)
 
     account.last_synced_at = _now()

@@ -10,6 +10,20 @@
   --danger: #b3261e;
   --radius: 10px;
   --gutter: 16px;
+  /* category palette, picked so icons stay readable on a light tint */
+  --cat-blue: #2f62c9;
+  --cat-sky: #1d7aa3;
+  --cat-teal: #12807a;
+  --cat-green: #2b8540;
+  --cat-lime: #5b7a10;
+  --cat-amber: #966700;
+  --cat-orange: #c0531a;
+  --cat-red: #c4362d;
+  --cat-pink: #bd3779;
+  --cat-purple: #7a4fc4;
+  --cat-slate: #4f6378;
+  --cat-brown: #8a5a3c;
+  --cat-gray: #687280;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -23,6 +37,19 @@
     --in: #5fc79d;
     --pending: #d9b65c;
     --danger: #f2b8b5;
+    --cat-blue: #8fb0f0;
+    --cat-sky: #79c4e8;
+    --cat-teal: #5fcfc2;
+    --cat-green: #79d08c;
+    --cat-lime: #b5d65a;
+    --cat-amber: #e8c15a;
+    --cat-orange: #f0a070;
+    --cat-red: #f29a92;
+    --cat-pink: #f09cc6;
+    --cat-purple: #bfa3f2;
+    --cat-slate: #a7b6c6;
+    --cat-brown: #d6a882;
+    --cat-gray: #a8b0bc;
     color-scheme: dark;
   }
 }

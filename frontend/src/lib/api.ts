@@ -9,6 +9,19 @@ export type Transaction = {
   account: string;
   aspsp: string;
   mcc: string | null;
+  category_id: number | null;
+  category_source: 'manual' | 'learned' | 'mcc' | null;
+};
+
+export type Category = {
+  id: number;
+  parent_id: number | null;
+  key: string | null;
+  name: string;
+  kind: 'expense' | 'income' | 'transfer' | 'reimbursement';
+  color: string | null;
+  icon: string | null;
+  sort_order: number;
 };
 
 export type Account = {
@@ -50,6 +63,9 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
     return request<{ total: number; items: Transaction[] }>(`/api/transactions?${qs}`);
   },
+  setCategory: (id: number, category_id: number | null) =>
+    request<Transaction>(`/api/transactions/${id}`, { method: 'PATCH', body: JSON.stringify({ category_id }) }),
+  categories: () => request<Category[]>('/api/categories'),
   accounts: () => request<Account[]>('/api/accounts'),
   banks: () => request<Bank[]>('/api/aspsps'),
   connect: (aspsp: string) =>

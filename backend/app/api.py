@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .errors import ConfigError
 from .enablebanking import EnableBankingClient, EnableBankingError
-from .models import Account, Connection, SyncRun, Transaction
+from .models import Account, Category, Connection, SyncRun, Transaction
 from .sync import store_session, sync_account, sync_all
 
 router = APIRouter()
@@ -36,6 +36,10 @@ def get_settings(request: Request):
 class ConnectRequest(BaseModel):
     aspsp: str
     country: str | None = None
+
+
+class TransactionUpdate(BaseModel):
+    category_id: int | None
 
 
 def _iso(dt: datetime | None) -> str | None:
@@ -130,8 +134,8 @@ def list_accounts(db: Session = Depends(get_db)):
 
 @router.get("/api/transactions")
 def list_transactions(account: int | None = None, from_: date | None = Query(None, alias="from"),
-                      to: date | None = None, q: str | None = None, limit: int = 100, offset: int = 0,
-                      db: Session = Depends(get_db)):
+                      to: date | None = None, q: str | None = None, category: str | None = None,
+                      limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
     stmt = select(Transaction, Account).join(Account)
     if account:
         stmt = stmt.where(Transaction.account_id == account)
@@ -143,6 +147,15 @@ def list_transactions(account: int | None = None, from_: date | None = Query(Non
         like = f"%{q}%"
         stmt = stmt.where(or_(Transaction.description.ilike(like), Transaction.creditor_name.ilike(like),
                               Transaction.debtor_name.ilike(like)))
+    if category == "none":
+        stmt = stmt.where(Transaction.category_id.is_(None))
+    elif category:
+        try:
+            cid = int(category)
+        except ValueError:
+            raise HTTPException(422, "category must be an id or 'none'")
+        children = select(Category.id).where(Category.parent_id == cid)
+        stmt = stmt.where(or_(Transaction.category_id == cid, Transaction.category_id.in_(children)))
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     limit = max(1, min(limit, 500))
     rows = db.execute(
@@ -150,13 +163,38 @@ def list_transactions(account: int | None = None, from_: date | None = Query(Non
     ).all()
     return {
         "total": total,
-        "items": [
-            {"id": t.id, "date": t.date.isoformat() if t.date else None, "status": t.status,
-             "description": t.description, "amount_ore": t.amount_ore, "currency": t.currency,
-             "account_id": a.id, "account": a.name or a.aspsp_name, "aspsp": a.aspsp_name, "mcc": t.mcc}
-            for t, a in rows
-        ],
+        "items": [_transaction(t, a) for t, a in rows],
     }
+
+
+def _transaction(t: Transaction, a: Account) -> dict:
+    return {"id": t.id, "date": t.date.isoformat() if t.date else None, "status": t.status,
+            "description": t.description, "amount_ore": t.amount_ore, "currency": t.currency,
+            "account_id": a.id, "account": a.name or a.aspsp_name, "aspsp": a.aspsp_name, "mcc": t.mcc,
+            "category_id": t.category_id, "category_source": t.category_source}
+
+
+@router.patch("/api/transactions/{tx_id}")
+def update_transaction(tx_id: int, body: TransactionUpdate, db: Session = Depends(get_db)):
+    t = db.get(Transaction, tx_id)
+    if t is None:
+        raise HTTPException(404, "Transaktionen finns inte")
+    if body.category_id is not None and db.get(Category, body.category_id) is None:
+        raise HTTPException(422, "Kategorin finns inte")
+    t.category_id = body.category_id
+    t.category_source = "manual" if body.category_id is not None else None
+    db.commit()
+    return _transaction(t, t.account)
+
+
+@router.get("/api/categories")
+def list_categories(db: Session = Depends(get_db)):
+    rows = db.scalars(select(Category).order_by(Category.parent_id.nulls_first(), Category.sort_order, Category.id))
+    return [
+        {"id": c.id, "parent_id": c.parent_id, "key": c.key, "name": c.name, "kind": c.kind, "color": c.color,
+         "icon": c.icon, "sort_order": c.sort_order}
+        for c in rows
+    ]
 
 
 @router.post("/api/sync")
