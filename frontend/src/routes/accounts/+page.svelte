@@ -9,6 +9,7 @@
   let busy = $state<'' | 'connect' | 'sync'>('');
   let message = $state('');
   let showConnect = $state(false);
+  let renewing = $state('');
 
   const DAY = 86400000;
   const daysLeft = (iso: string | null) => (iso ? Math.ceil((new Date(iso).getTime() - Date.now()) / DAY) : null);
@@ -31,21 +32,23 @@
     showConnect = true;
     if (banks.length) return;
     try {
-      banks = await api.banks();
+      banks = (await api.banks()).sort((a, b) => a.name.localeCompare(b.name, 'sv'));
     } catch (e) {
       error = `Kunde inte hämta banklistan: ${(e as Error).message}`;
     }
   }
 
-  async function connect() {
+  async function connect(name: string) {
     busy = 'connect';
+    renewing = name;
     error = '';
     try {
-      const { url } = await api.connect(bank);
+      const { url } = await api.connect(name);
       location.href = url;
     } catch (e) {
       error = `Kunde inte starta kopplingen: ${(e as Error).message}`;
       busy = '';
+      renewing = '';
     }
   }
 
@@ -85,7 +88,7 @@
 </div>
 
 {#if showConnect}
-  <form class="connect" onsubmit={(e) => { e.preventDefault(); connect(); }}>
+  <form class="connect" onsubmit={(e) => { e.preventDefault(); connect(bank); }}>
     <select aria-label="Bank" bind:value={bank} required>
       <option value="" disabled>Välj bank</option>
       {#each banks as b (b.name)}
@@ -93,7 +96,7 @@
       {/each}
     </select>
     <button class="primary" disabled={!bank || busy === 'connect'}>
-      {busy === 'connect' ? 'Öppnar BankID…' : 'Fortsätt till BankID'}
+      {busy === 'connect' && renewing === bank ? 'Öppnar BankID…' : 'Fortsätt till BankID'}
     </button>
   </form>
 {/if}
@@ -108,17 +111,25 @@
 {#each groups as [aspsp, list] (aspsp)}
   {@const left = daysLeft(list[0].valid_until)}
   {@const status = list[0].connection_status}
+  {@const needsRenewal = status !== 'active' || (left !== null && left <= 14)}
   <section>
     <h2>{aspsp}</h2>
-    <p class="consent" class:warn={status !== 'active' || (left !== null && left <= 14)}>
-      {#if status === 'expired' || (left !== null && left <= 0)}
-        Samtycket har gått ut. Koppla banken igen för att fortsätta hämta.
-      {:else if status === 'error'}
-        Kopplingen fungerar inte. Koppla banken igen.
-      {:else if left !== null}
-        Samtycket gäller till {formatDate(list[0].valid_until)} ({left} dagar kvar).
+    <div class="consent-row">
+      <p class="consent" class:warn={needsRenewal}>
+        {#if status === 'expired' || (left !== null && left <= 0)}
+          Samtycket har gått ut.
+        {:else if status === 'error'}
+          Kopplingen fungerar inte.
+        {:else if left !== null}
+          Samtycket gäller till {formatDate(list[0].valid_until)} ({left} dagar kvar).
+        {/if}
+      </p>
+      {#if needsRenewal}
+        <button class="primary" onclick={() => connect(aspsp)} disabled={busy === 'connect'}>
+          {renewing === aspsp ? 'Öppnar BankID…' : 'Förnya samtycke'}
+        </button>
       {/if}
-    </p>
+    </div>
     <ul>
       {#each list as a (a.id)}
         <li>
@@ -145,7 +156,8 @@
   .notice { padding: 10px 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--rule); }
   section { margin-top: 24px; }
   h2 { font-size: 1.05rem; margin: 0 0 2px; }
-  .consent { margin: 0 0 8px; font-size: 0.88rem; color: var(--muted); }
+  .consent-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 8px; }
+  .consent { margin: 0;font-size: 0.88rem; color: var(--muted); }
   .consent.warn { color: var(--pending); font-weight: 600; }
   ul { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
   li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 12px 14px; }

@@ -116,6 +116,21 @@ def test_store_session_reuses_account_by_identification_hash(db, client, account
     assert conn.status == "active" and conn.valid_until.year == 2027
 
 
+def test_store_session_prefers_account_description_over_holder_name(db, client):
+    conn = Connection(aspsp_name="Skandia", aspsp_country="SE", state="s3")
+    db.add(conn)
+    db.commit()
+    store_session(db, client, conn, {
+        "session_id": "sess-3",
+        "accounts": [{"uid": "a", "identification_hash": "ha", "name": "Kim Svensson", "details": "Sparkonto",
+                      "product": "Skandiakonto"},
+                     {"uid": "b", "identification_hash": "hb", "name": "Kim Svensson", "product": "Allkonto"},
+                     {"uid": "c", "identification_hash": "hc", "name": "Kim Svensson"}],
+    })
+    accs = db.scalars(select(Account).order_by(Account.id)).all()
+    assert [a.name for a in accs] == ["Sparkonto", "Allkonto", "Kim Svensson"]
+
+
 @respx.mock
 def test_database_is_writable_while_fetching_from_bank(tmp_path, client):
     """The bank call can be slow; other requests must still be able to write meanwhile."""

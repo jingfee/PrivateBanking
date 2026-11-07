@@ -135,7 +135,8 @@ def store_session(db: Session, client: EnableBankingClient, conn: Connection, se
             db.add(row)
         row.uid = acc["uid"]
         row.connection = conn
-        row.name = acc.get("name") or acc.get("product") or row.name
+        # "name" is the account holder's name; "details"/"product" describe the account itself
+        row.name = acc.get("details") or acc.get("product") or acc.get("name") or row.name
         row.identifier = identifier or row.identifier
         row.currency = acc.get("currency") or row.currency
         row.active = True
