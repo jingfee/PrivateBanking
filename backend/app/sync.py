@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from .categorize import categorize_uncategorized
 from .enablebanking import EnableBankingClient, EnableBankingError
 from .models import Account, Connection, SyncRun, Transaction
 from .normalize import fingerprints, normalize
@@ -83,10 +84,23 @@ def _sync_account(db: Session, client: EnableBankingClient, account: Account, ov
             run.updated += changed
 
     # Pending rows are a snapshot: replace them wholesale, so a reservation disappears once it is booked.
+    # Keep any category already set on a reservation that is still pending.
+    kept = {
+        fp: (cid, source)
+        for fp, cid, source in db.execute(
+            select(Transaction.fingerprint, Transaction.category_id, Transaction.category_source)
+            .where(Transaction.account_id == account.id, Transaction.status == "PDNG",
+                   Transaction.category_id.is_not(None))
+        )
+    }
     db.execute(delete(Transaction).where(Transaction.account_id == account.id, Transaction.status == "PDNG"))
     for t, fp in zip(pending, fingerprints(pending)):
-        db.add(Transaction(account_id=account.id, fingerprint=fp, **t.__dict__))
+        category_id, source = kept.get(fp, (None, None))
+        db.add(Transaction(account_id=account.id, fingerprint=fp, category_id=category_id,
+                           category_source=source, **t.__dict__))
     run.pending = len(pending)
+    db.flush()
+    categorize_uncategorized(db, account.id)
 
     account.last_synced_at = _now()
     run.finished_at = _now()
@@ -135,7 +149,8 @@ def store_session(db: Session, client: EnableBankingClient, conn: Connection, se
             db.add(row)
         row.uid = acc["uid"]
         row.connection = conn
-        row.name = acc.get("name") or acc.get("product") or row.name
+        # "name" is the account holder's name; "details"/"product" describe the account itself
+        row.name = acc.get("details") or acc.get("product") or acc.get("name") or row.name
         row.identifier = identifier or row.identifier
         row.currency = acc.get("currency") or row.currency
         row.active = True

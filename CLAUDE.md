@@ -6,7 +6,8 @@ Enable Banking (PSD2, read-only) and stores them in SQLite. UI text is Swedish.
 ## Layout
 - `backend/` – FastAPI + SQLAlchemy 2 + Alembic, Python 3.13, managed with `uv`
   - `app/enablebanking.py` API client (JWT RS256, `kid` = app id), `app/normalize.py` raw → stored fields,
-    `app/sync.py` fetch/upsert, `app/api.py` routes, `app/main.py` app factory + scheduler + SPA serving
+    `app/sync.py` fetch/upsert, `app/categorize.py` automatic categories (manual > learned > keyword/MCC),
+    `app/api.py` routes, `app/main.py` app factory + scheduler + SPA serving
 - `frontend/` – SvelteKit 2 / Svelte 5 (runes), adapter-static SPA, served by the backend in production
 - `Dockerfile` (one image), `docker-compose.yml` (runs `ghcr.io/jingfee/privatebanking`), `.github/workflows/ci.yml`
 

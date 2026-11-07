@@ -45,6 +45,37 @@ class Account(Base):
     connection: Mapped[Connection | None] = relationship(back_populates="accounts")
 
 
+class Category(Base):
+    """Two levels: a top-level group (parent_id None) and its subcategories.
+
+    kind decides how amounts count in summaries: expense, income, transfer (ignored) or
+    reimbursement (money back for shared expenses, offsets spending). Subcategories copy
+    kind from their parent; color is set on the parent and inherited.
+    """
+
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"))
+    key: Mapped[str | None] = mapped_column(String(50), unique=True)  # stable id for built-in categories
+    name: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(20), default="expense")
+    color: Mapped[str | None] = mapped_column(String(20))
+    icon: Mapped[str | None] = mapped_column(String(50))
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+
+class CategoryRule(Base):
+    """Learned from the user: transactions with this key (direction + counterparty) get this category."""
+
+    __tablename__ = "category_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(300), unique=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"))
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
@@ -69,9 +100,12 @@ class Transaction(Base):
     debtor_name: Mapped[str | None]
     mcc: Mapped[str | None] = mapped_column(String(4))
     raw: Mapped[dict] = mapped_column(JSON)
-    category_id: Mapped[int | None]
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="SET NULL"))
+    category_source: Mapped[str | None] = mapped_column(String(10))  # manual | learned | auto (keyword/MCC)
     first_seen: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+    account: Mapped[Account] = relationship()
 
 
 class SyncRun(Base):
