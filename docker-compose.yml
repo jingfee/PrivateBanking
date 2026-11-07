@@ -5,13 +5,18 @@ services:
     build: .
     container_name: privatebanking
     restart: unless-stopped
-    env_file: .env
+    # Settings come from the environment: a .env file next to this file, or the
+    # environment configured in your deploy tool. See .env.example.
     environment:
+      EB_APP_ID: ${EB_APP_ID:?set EB_APP_ID}
+      EB_REDIRECT_URL: ${EB_REDIRECT_URL:?set EB_REDIRECT_URL}
+      SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-6}
       DATABASE_PATH: /data/privatebanking.db
       EB_KEY_PATH: /secrets/eb.pem
     volumes:
-      - ./data:/data
-      - ./secrets/eb.pem:/secrets/eb.pem:ro
+      # Keep data and the key outside the stack directory if your deploy tool may recreate it.
+      - ${PB_DATA_DIR:-./data}:/data
+      - ${PB_KEY_FILE:-./secrets/eb.pem}:/secrets/eb.pem:ro
     ports:
       # A reverse proxy on the same host proxies to 127.0.0.1:8000. If it runs elsewhere,
       # set PB_LISTEN in .env to an address it can reach (e.g. <server-ip>:8000).
