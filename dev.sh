@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 ROOT=$PWD
 
 for cmd in uv npm; do
-  command -v "$cmd" >/dev/null || { echo "Saknar $cmd. På Fedora: sudo dnf install uv nodejs" >&2; exit 1; }
+  command -v "$cmd" >/dev/null || { echo "Saknar $cmd. Installera uv (https://docs.astral.sh/uv/) och Node.js 22." >&2; exit 1; }
 done
 
 if [ -f .env.dev ]; then set -a; source .env.dev; set +a; fi

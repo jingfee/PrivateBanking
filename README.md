@@ -5,48 +5,59 @@ Privat, självhostad app som hämtar mina egna bank- och korttransaktioner via
 
 - Backend: Python, FastAPI, SQLite (`backend/`)
 - Frontend: SvelteKit-PWA (`frontend/`), byggs statiskt och serveras av backenden
-- En container bakom Caddy, nås bara från hemnätverket och via Tailscale
-- Deployas av Komodo från GitHub Container Registry
+- En enda container; körs bakom en reverse proxy med HTTPS och ska bara nås från ett privat nätverk
 
-## Driftsättning (homelab med Komodo)
+## Driftsättning
 
-Vid push/merge till `main` kör GitHub Actions testerna och bygger sedan imagen
-`ghcr.io/jingfee/privatebanking` med taggarna `latest` och `sha-<commit>`. Komodo hämtar den
-nya imagen (automatiskt en gång per dygn eller manuellt).
+Vid push/merge till `main` kör GitHub Actions testerna och bygger sedan en image till
+GitHub Container Registry (`ghcr.io/<ägare>/privatebanking`) med taggarna `latest` och
+`sha-<commit>`. Servern kör `docker-compose.yml`, som använder den imagen.
 
-Första gången:
+1. Hämta `docker-compose.yml` och `.env.example` till servern.
+2. Skapa kataloger för data och nyckel (containern kör som uid 1000):
 
-1. Skapa en GitHub-token (classic) med endast `read:packages` och lägg in den i Komodo som
-   registry-konto för `ghcr.io` (användare `jingfee`). Imagen är privat.
-2. Skapa en stack i Komodo från `docker-compose.yml` i det här repot.
-3. På servern, i stackens katalog: `mkdir -p data secrets && sudo chown 1000 data`.
-4. Lägg Enable Banking-nyckeln i `secrets/eb.pem` och `sudo chown 1000 secrets/eb.pem`.
-   (Finns inte filen när stacken startar skapar Docker en katalog med det namnet.)
-5. Skapa `.env` från `.env.example` (eller som miljövariabler i Komodo).
-6. Lägg till appen i Caddy (HTTPS krävs för PWA:n och BankID-redirecten).
-   Appen har ingen egen inloggning, så begränsa den till hemnätverket och Tailscale:
+   ```bash
+   mkdir -p data secrets && sudo chown 1000 data
+   ```
+
+3. Lägg Enable Banking-nyckeln i `secrets/eb.pem` och `sudo chown 1000 secrets/eb.pem`.
+   (Finns inte filen när containern startar skapar Docker en katalog med det namnet.)
+4. Skapa `.env` från `.env.example` och fyll i app-id och redirect-URL.
+   `EB_REDIRECT_URL` måste vara exakt en av redirect-URL:erna i Enable Banking-appen.
+5. Är imagen privat: logga in mot registryt med en GitHub-token som har `read:packages`
+   (`docker login ghcr.io`).
+6. Starta:
+
+   ```bash
+   docker compose up -d
+   ```
+
+7. Lägg appen bakom en reverse proxy med HTTPS (krävs för PWA:n och BankID-redirecten).
+   Appen har ingen egen inloggning, så släpp bara igenom anrop från privata nätverk.
+   Exempel för Caddy:
 
    ```caddy
-   bank.example.se {
-       @outside not remote_ip private_ranges 100.64.0.0/10
+   bank.example.com {
+       @outside not remote_ip private_ranges
        respond @outside 403
        reverse_proxy 127.0.0.1:8000
    }
    ```
 
-7. Öppna `https://bank.example.se/accounts`, välj **Koppla bank** och logga in med BankID.
+   Når du servern via ett VPN med egna adresser, lägg till dess adressintervall efter
+   `private_ranges`.
+8. Öppna `https://bank.example.com/accounts`, välj **Koppla bank** och logga in med BankID.
 
-**Rulla tillbaka:** sätt `PB_TAG=sha-<commit>` och deploya om stacken.
+**Uppdatera:** `docker compose pull && docker compose up -d`, eller låt ett deploy-verktyg
+hämta nya `latest`. **Rulla tillbaka:** sätt `PB_TAG=sha-<commit>` i `.env` och starta om.
 
 **Backup:** databasen kopieras automatiskt till `data/backups/` före varje schemaändring
 (de 10 senaste sparas). Ta även egna kopior av `data/privatebanking.db`, t.ex.
 `sqlite3 data/privatebanking.db ".backup backup.db"`.
 
-## Utveckling (Fedora)
+## Utveckling
 
-```bash
-sudo dnf install uv nodejs
-```
+Kräver [uv](https://docs.astral.sh/uv/) och Node.js 22.
 
 ```bash
 ./dev.sh

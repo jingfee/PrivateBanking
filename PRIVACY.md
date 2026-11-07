@@ -9,7 +9,7 @@ PrivateBanking is a private, non-commercial application used solely by its owner
 - Read-only access. The application does not initiate payments.
 
 ## How data is stored
-- Data is stored only on the owner's self-hosted server (home lab), accessible solely via the owner's private network.
+- Data is stored only on the owner's self-hosted server, accessible solely via the owner's private network.
 - No data is sold, shared with, or transferred to any third party.
 - No analytics, tracking or advertising.
 

@@ -25,4 +25,4 @@ Enable Banking (PSD2, read-only) and stores them in SQLite. UI text is Swedish.
   and never sync against real banks from local development (use the sandbox app).
 - Never commit `.env*`, `secrets/`, `*.pem` or `data/`.
 - Work on a branch and open a PR; CI must pass before merging to `main`. Merging to `main` builds and
-  pushes the image that the home server deploys.
+  pushes the image that deployments pull.
