@@ -8,6 +8,7 @@
   <a class="brand" href="/">Kassabok</a>
   <nav>
     <a href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined}>Transaktioner</a>
+    <a href="/categories" aria-current={page.url.pathname.startsWith('/categories') ? 'page' : undefined}>Kategorier</a>
     <a href="/accounts" aria-current={page.url.pathname.startsWith('/accounts') ? 'page' : undefined}>Konton</a>
   </nav>
 </header>
@@ -33,6 +34,10 @@
   }
   .brand { font-weight: 700; font-size: 1.15rem; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
   nav { display: flex; gap: 16px; }
+  @media (max-width: 440px) {
+    header { justify-content: center; }
+    .brand { display: none; }
+  }
   nav a { color: var(--muted); text-decoration: none; padding: 4px 0; }
   nav a[aria-current='page'] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
   main { max-width: 760px; margin: 0 auto; padding: 16px var(--gutter) 48px; }

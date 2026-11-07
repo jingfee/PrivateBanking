@@ -225,3 +225,51 @@ def test_api_reports_how_many_similar_were_updated(app_client):
     assert r["similar_updated"] == 1
     sources = {i["id"]: i["category_source"] for i in app_client.get("/api/transactions").json()["items"]}
     assert sorted(s or "" for s in sources.values()) == ["", "learned", "manual"]
+
+
+# --- editing categories ------------------------------------------------------------------------
+
+def test_create_update_and_delete_categories(app_client):
+    r = app_client.post("/api/categories", json={"name": " Bil ", "kind": "expense", "color": "teal", "icon": "car"})
+    assert r.status_code == 201
+    bil = r.json()
+    assert (bil["name"], bil["color"], bil["parent_id"]) == ("Bil", "teal", None)
+
+    sub = app_client.post("/api/categories", json={"name": "Parkering", "parent_id": bil["id"],
+                                                     "kind": "income", "color": "red"}).json()
+    assert (sub["kind"], sub["color"], sub["icon"]) == ("expense", None, "tag")  # copied/inherited, not taken
+
+    # no third level
+    assert app_client.post("/api/categories", json={"name": "X", "parent_id": sub["id"]}).status_code == 422
+    # subcategories cannot set kind or color
+    assert app_client.patch(f"/api/categories/{sub['id']}", json={"color": "red"}).status_code == 422
+    # palette and names are validated
+    assert app_client.patch(f"/api/categories/{bil['id']}", json={"color": "#ff0000"}).status_code == 422
+    assert app_client.patch(f"/api/categories/{bil['id']}", json={"name": "  "}).status_code == 422
+
+    r = app_client.patch(f"/api/categories/{bil['id']}", json={"name": "Bilen", "kind": "transfer",
+                                                                "color": "brown", "icon": "fuel"}).json()
+    assert (r["name"], r["kind"], r["color"], r["icon"]) == ("Bilen", "transfer", "brown", "fuel")
+    cats = {c["id"]: c for c in app_client.get("/api/categories").json()}
+    assert cats[sub["id"]]["kind"] == "transfer"  # follows the parent
+
+
+def test_delete_category_recategorises_its_transactions(app_client):
+    add_transactions(app_client.db, (-4500, "ICA"), (-300, "LOKALA BUTIKEN"))
+    cats = {c["key"]: c["id"] for c in app_client.get("/api/categories").json()}
+    items = {i["description"]: i for i in app_client.get("/api/transactions").json()["items"]}
+    mat = cats["mat"]
+    app_client.patch(f"/api/transactions/{items['ICA']['id']}", json={"category_id": cats["mat.restaurang"]})
+    app_client.patch(f"/api/transactions/{items['LOKALA BUTIKEN']['id']}", json={"category_id": cats["mat.livsmedel"]})
+    counts = {c["id"]: c["transaction_count"] for c in app_client.get("/api/categories").json()}
+    assert counts[cats["mat.restaurang"]] == 1 and counts[cats["mat.livsmedel"]] == 1
+
+    r = app_client.delete(f"/api/categories/{mat}").json()
+    assert r == {"deleted": 5, "transactions": 2}
+    remaining = {c["id"] for c in app_client.get("/api/categories").json()}
+    assert mat not in remaining and cats["mat.livsmedel"] not in remaining
+    after = {i["description"]: (i["category_id"], i["category_source"])
+             for i in app_client.get("/api/transactions").json()["items"]}
+    # ICA's built-in guess pointed at a deleted category, so both are simply uncategorised now
+    assert after == {"ICA": (None, None), "LOKALA BUTIKEN": (None, None)}
+    assert app_client.delete(f"/api/categories/{mat}").status_code == 404

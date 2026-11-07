@@ -22,6 +22,15 @@ export type Category = {
   color: string | null;
   icon: string | null;
   sort_order: number;
+  transaction_count: number;
+};
+
+export type CategoryInput = {
+  name?: string;
+  parent_id?: number | null;
+  kind?: Category['kind'];
+  color?: string;
+  icon?: string;
 };
 
 export type Account = {
@@ -66,6 +75,12 @@ export const api = {
   setCategory: (id: number, category_id: number | null) =>
     request<Transaction & { similar_updated: number }>(`/api/transactions/${id}`, { method: 'PATCH', body: JSON.stringify({ category_id }) }),
   categories: () => request<Category[]>('/api/categories'),
+  createCategory: (body: CategoryInput) =>
+    request<Category>('/api/categories', { method: 'POST', body: JSON.stringify(body) }),
+  updateCategory: (id: number, body: CategoryInput) =>
+    request<Category>(`/api/categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteCategory: (id: number) =>
+    request<{ deleted: number; transactions: number }>(`/api/categories/${id}`, { method: 'DELETE' }),
   accounts: () => request<Account[]>('/api/accounts'),
   banks: () => request<Bank[]>('/api/aspsps'),
   connect: (aspsp: string) =>
